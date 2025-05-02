@@ -112,6 +112,59 @@ exports.getModules = async (req, res) => {
   }
 };
 
+exports.getModulesDetails = async (req, res) => {
+  try {
+    const modules = await Module.find();
+
+    const result = await Promise.all(
+      modules.map(async (module) => {
+        const subModules = await SubModule.find({ moduleId: module._id });
+
+        const enrichedSubModules = await Promise.all(
+          subModules.map(async (subModule) => {
+            const courses = await Course.find({ 
+              moduleId: module._id, 
+              subModuleId: subModule._id 
+            });
+
+            const enrichedCourses = await Promise.all(
+              courses.map(async (course) => {
+                const quiz = await Quiz.findOne({ 
+                  moduleId: module._id, 
+                  subModuleId: subModule._id, 
+                  courseId: course._id 
+                });
+
+                return {
+                  ...course._doc,
+                  quiz: quiz ? quiz._doc : null,
+                };
+              })
+            );
+
+            return {
+              ...subModule._doc,
+              courses: enrichedCourses,
+            };
+          })
+        );
+
+        return {
+          module: {
+            ...module._doc,
+            subModules: enrichedSubModules,
+          }
+        };
+      })
+    );
+
+    res.json(result);
+  } catch (error) {
+    console.error("Error in getModules:", error);
+    res.status(500).json({ message: "Server Error", error: error.message });
+  }
+};
+
 /**
  * @desc    Get Single Module by ID
  * @route   GET /api/modules/:id
